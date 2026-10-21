@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
         if (cfg.affinity) {
             CPU_ZERO(&cpuset);
             CPU_SET(i, &cpuset);
-            pthread_setaffinity_np(t, sizeof(cpuset), &cpuset);
+            pthread_setaffinity_np(t->thread, sizeof(cpuset), &cpuset);
         }
     }
 
@@ -275,8 +275,8 @@ void *thread_main(void *arg) {
     hdr_init(1, MAX_LATENCY, 3, &thread->latency_histogram);
     hdr_init(1, MAX_LATENCY, 3, &thread->u_latency_histogram);
 
-    char *request,user = NULL;
-    size_t length,user_len = 0;
+    char *request = NULL, *user = NULL;
+    size_t length = 0, user_len = 0;
 
     if (!cfg.dynamic) {
         script_request(thread->L, &request, &length, &user, &user_len);
@@ -292,6 +292,8 @@ void *thread_main(void *arg) {
         c->ssl        = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request    = request;
         c->length     = length;
+        c->user       = user;
+        c->user_len   = user_len;
         c->throughput = throughput;
         c->catch_up_throughput = throughput * 2;
         c->complete   = 0;

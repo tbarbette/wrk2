@@ -142,46 +142,34 @@ void script_init(lua_State *L, thread *t, int argc, char **argv) {
     lua_pop(t->L, 1);
 }
 
-void script_request(lua_State *L, char **buf, size_t *len, char** user, size_t *user_len) {
-    int pop = 1;
-    int level = lua_gettop(L);
+void script_request(lua_State *L, char **buf, size_t *len, char **user, size_t *user_len) {
+    int pop = 2;
     lua_getglobal(L, "request");
     if (!lua_isfunction(L, -1)) {
         lua_getglobal(L, "wrk");
         lua_getfield(L, -1, "request");
         pop += 2;
     }
-    lua_call(L, 0, LUA_MULTRET);
-    int nresults = lua_gettop(L) - level;
-    if (nresults == 2) {
-    const char *str_user = lua_tolstring(L, -1, user_len);
-    *user = realloc(*user, *user_len);
-    memcpy(*user, str_user, *user_len);
-    lua_pop(L, pop);}
+    // request() may return an optional user value, nil if absent
+    lua_call(L, 0, 2);
 
-    const char *str = lua_tolstring(L, -1, len);
+    const char *str = lua_tolstring(L, -2, len);
     *buf = realloc(*buf, *len);
     memcpy(*buf, str, *len);
-    lua_pop(L, pop);
-   }
 
-void script_bind(lua_State *L, char **buf, size_t *len) {
-    int pop = 1;
-    lua_getglobal(L, "bind");
-    if (!lua_isfunction(L, -1)) {
-        lua_getglobal(L, "wrk");
-        lua_getfield(L, -1, "bind");
-        pop += 2;
+    const char *str_user = lua_isnil(L, -1) ? NULL : lua_tolstring(L, -1, user_len);
+    if (str_user) {
+        *user = realloc(*user, *user_len + 1);
+        memcpy(*user, str_user, *user_len);
+    } else {
+        free(*user);
+        *user = NULL;
+        *user_len = 0;
     }
-    lua_call(L, 0, 1);
-    const char *str = lua_tolstring(L, -1, len);
-    *buf = realloc(*buf, *len);
-    memcpy(*buf, str, *len);
     lua_pop(L, pop);
 }
 
-void script_response(lua_State *L, int status, buffer *headers, buffer *body, char* request, int len
-        ) {
+void script_response(lua_State *L, int status, buffer *headers, buffer *body, char *user, size_t user_len) {
     lua_getglobal(L, "response");
     lua_pushinteger(L, status);
     lua_newtable(L);
@@ -193,7 +181,11 @@ void script_response(lua_State *L, int status, buffer *headers, buffer *body, ch
     }
 
     lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
-    lua_pushlstring(L, request,  len);
+    if (user) {
+        lua_pushlstring(L, user, user_len);
+    } else {
+        lua_pushnil(L);
+    }
     lua_call(L, 4, 0);
 
     buffer_reset(headers);
@@ -289,9 +281,10 @@ size_t script_verify_request(lua_State *L) {
     char *request = NULL;
     size_t len, count = 0;
     char *user = NULL;
-    size_t user_len;
+    size_t user_len = 0;
 
     script_request(L, &request, &len, &user, &user_len);
+    free(user);
     http_parser_init(&parser, HTTP_REQUEST);
     parser.data = &count;
 
