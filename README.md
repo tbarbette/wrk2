@@ -3,7 +3,26 @@
 
   **a HTTP benchmarking tool based mostly on wrk**
 
-  This is Tom Barbette's slightly modified version of [http://github.com/gilene/wrk2](wrk2)
+  This is Tom Barbette's slightly modified version of [wrk2](https://github.com/giltene/wrk2).
+
+## Differences with giltene/wrk2
+
+  * **`-a, --affinity`**: pins thread *i* to CPU *i* (Linux only, uses
+    `pthread_setaffinity_np`).
+  * **`-b, --bind <IP>`**: binds every connection to the given local IPv4
+    address before connecting, to choose the source interface/IP.
+  * **`-r, --raw`**: prints statistics without human-readable units (raw
+    numbers, `;`-separated thread stats header), handy for parsing.
+  * **`Connection: close` by default**: `wrk.format()` adds
+    `Connection: close` unless a `Connection` header is already set, so each
+    request opens a new connection. Use `scripts/keepalive.lua` (or set the
+    header yourself) to get the original keep-alive behavior.
+  * **Per-request user value in Lua**: `request()` may return a second value,
+    `return req, user`, which is then passed back as a 4th argument to
+    `response(status, headers, body, user)`.
+  * **Finer percentile output**: the step between reported percentiles in the
+    latency distribution is capped at 1%.
+  * **Build system**: autoconf (`./configure && make`), see Compilation below.
 
   wrk2 is wrk modifed to produce a constant throughput load, and
   accurate latency details to the high 9s (i.e. can produce
